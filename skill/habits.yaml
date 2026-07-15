@@ -1,0 +1,17 @@
+# Habit tracking configuration
+# Managed automatically by the habit-tracking skill.
+# Do not edit manually unless you know what you're doing.
+
+coaching:
+  style: direct  # direct | warm | minimal
+  missed_day_policy: fire_and_forget  # fire_and_forget | retry_once | pause_after_3
+  schedule_time: "20:00"  # Initial default time (24h format)
+
+habits:
+  - id: "example"
+    anchor: "After I pour my morning coffee"
+    behavior: "I will take my vitamins"
+    celebration: "I did it!"
+    emoji: "💊"
+    time_of_day: "morning"
+    active: false  # Example habit, inactive by default
