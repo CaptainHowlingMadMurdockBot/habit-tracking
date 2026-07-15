@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from .models import Habit, CoachingConfig
+from .models import Habit, CoachingConfig, Reminder
 
 
 class Coach:
@@ -18,8 +18,19 @@ class Coach:
     by the test suite in ``tests/test_coach.py``.
     """
 
-    def __init__(self, config: CoachingConfig):
+    def __init__(self, config: CoachingConfig, celebrations: list[str] | None = None):
+        """Instantiate a ``Coach``.
+
+        The original implementation accepted only a ``CoachingConfig``. For v0.2.0 we
+        add an optional ``celebrations`` list that is used by :pymeth:`next_celebration`.
+        Existing callers that construct ``Coach`` without the second argument continue to
+        work – a single generic celebration ("🎉") is supplied as a default.
+        """
         self.config = config
+        # Preserve backward compatibility: if the caller does not supply celebrations, use a
+        # placeholder list containing a single emoji.
+        self.celebrations = celebrations if celebrations is not None else ["🎉"]
+        self._celebration_index = 0
 
     # ---------------------------------------------------------------------
     # Helper methods
@@ -101,3 +112,69 @@ class Coach:
         """
         return f"Did you just do **{behavior}**? {emoji} Want me to log it?"
 
+    # ---------------------------------------------------------------------
+    # New v0.2.0 API
+    # ---------------------------------------------------------------------
+    def next_celebration(self) -> str:
+        """Return the next celebration string, rotating through ``self.celebrations``.
+
+        The internal index is updated modulo the length of the celebrations list.
+        """
+        if not self.celebrations:
+            return ""
+        c = self.celebrations[self._celebration_index]
+        self._celebration_index = (self._celebration_index + 1) % len(self.celebrations)
+        return c
+
+    def render_habit_list(self, habits: list[Habit], reminder: Reminder) -> str:
+        """Render a habit list for a reminder.
+
+        Only habits that are **active**, referenced by ``reminder.habits`` and not
+        ``graduated_to_automatic`` are rendered. The rendering follows the spec provided
+        in the task description.
+        """
+        # Filter relevant habits
+        active_habits = [
+            h
+            for h in habits
+            if h.id in reminder.habits
+            and getattr(h, "active", False)
+            and not getattr(h, "graduated_to_automatic", False)
+        ]
+        lines: list[str] = []
+        for h in active_habits:
+            if getattr(h, "faded", False):
+                lines.append(
+                    f"{h.emoji} ~~{h.behavior}~~ — {h.anchor} (having trouble? Let's talk about it)"
+                )
+            elif getattr(h, "chain_steps", None):
+                first = h.chain_steps[0] if isinstance(h.chain_steps, list) and h.chain_steps else h.chain_steps
+                lines.append(f"{h.emoji} {h.behavior} — Start: {first}")
+            else:
+                lines.append(f"{h.emoji} {h.behavior} — {h.anchor}")
+        return "\n".join(lines)
+
+    def graduated_coaching(self, habit: Habit) -> str:
+        """Message for a habit that has become automatic (graduated)."""
+        return (
+            f"**{habit.behavior}** is automatic now — that's the goal working. "
+            "Celebration is optional. Want to grow it or use this capacity for something new? "
+            "Is the anchor still working for you?"
+        )
+
+    def faded_coaching(self, habit: Habit) -> str:
+        """Message for a habit that is currently faded (skipped)."""
+        return (
+            f"You've been skipping **{habit.behavior}**. That's data, not failure. "
+            "Let's look at B=MAP. Is it a Motivation issue? An Ability issue? A Prompt issue? "
+            "If it feels hard, let's shrink it. What's the smallest version you could do? "
+            "If the anchor isn't working, let's find a better one."
+        )
+
+    def build_reminder_message(self, reminder: Reminder, habits: list[Habit]) -> str:
+        """Replace ``{habit_list}`` placeholder in ``reminder.message`` with rendered list.
+
+        If the placeholder does not exist, the original message is returned unchanged.
+        """
+        habit_list = self.render_habit_list(habits, reminder)
+        return reminder.message.replace("{habit_list}", habit_list)

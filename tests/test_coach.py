@@ -1,5 +1,5 @@
 import pytest
-from src.habitlib.models import Habit, CoachingConfig
+from src.habitlib.models import Habit, CoachingConfig, Reminder
 from src.habitlib.coach import Coach
 
 def make_habit(id="h1", anchor="morning", behavior="drink water", celebration="yay", emoji="💧", time_of_day="07:00", active=True):
@@ -83,4 +83,85 @@ def test_logging_prompt():
     coach = Coach(config)
     out = coach.logging_prompt("drink water", "💧")
     assert out == "Did you just do **drink water**? 💧 Want me to log it?"
+
+# ---------------------------------------------------------------------
+# New v0.2.0 tests
+# ---------------------------------------------------------------------
+
+def make_reminder(message="Reminder: {habit_list}", habits=None):
+    if habits is None:
+        habits = []
+    # Reminder fields: id, schedule, cadence, message, habits, follow_up_delay
+    return Reminder(id="r1", schedule="2023-01-01", cadence="daily", message=message, habits=habits, follow_up_delay=0)
+
+def test_celebration_rotation_cycles():
+    config = CoachingConfig(style="direct")
+    coach = Coach(config, celebrations=["🎉", "👏", "🥳"])
+    assert coach.next_celebration() == "🎉"
+    assert coach.next_celebration() == "👏"
+    assert coach.next_celebration() == "🥳"
+
+def test_celebration_rotation_wraps():
+    config = CoachingConfig(style="direct")
+    coach = Coach(config, celebrations=["🙌"])
+    assert coach.next_celebration() == "🙌"
+    assert coach.next_celebration() == "🙌"
+
+def test_render_habit_list_excludes_graduated():
+    habit1 = Habit(id="h1", anchor="morning", behavior="drink water", celebration="yay", emoji="💧", time_of_day="07:00", active=True, graduated_to_automatic=True)
+    habit2 = Habit(id="h2", anchor="evening", behavior="read book", celebration="yay", emoji="📚", time_of_day="20:00", active=True)
+    reminder = make_reminder(habits=["h1", "h2"])
+    coach = Coach(CoachingConfig(style="direct"))
+    rendered = coach.render_habit_list([habit1, habit2], reminder)
+    # Only habit2 should appear
+    assert "📚 read book — evening" in rendered
+    assert "💧" not in rendered
+
+def test_render_habit_list_faded_message():
+    habit = Habit(id="h1", anchor="morning", behavior="drink water", celebration="yay", emoji="💧", time_of_day="07:00", active=True, faded=True)
+    reminder = make_reminder(habits=["h1"])
+    coach = Coach(CoachingConfig(style="direct"))
+    rendered = coach.render_habit_list([habit], reminder)
+    expected = "💧 ~~drink water~~ — morning (having trouble? Let's talk about it)"
+    assert rendered == expected
+
+def test_render_habit_list_chain_steps():
+    habit = Habit(id="h1", anchor="morning", behavior="run", celebration="yay", emoji="🏃", time_of_day="07:00", active=True, chain_steps=["stretch", "jog"])
+    reminder = make_reminder(habits=["h1"])
+    coach = Coach(CoachingConfig(style="direct"))
+    rendered = coach.render_habit_list([habit], reminder)
+    assert rendered == "🏃 run — Start: stretch"
+
+def test_render_habit_list_normal():
+    habit = Habit(id="h1", anchor="morning", behavior="drink water", celebration="yay", emoji="💧", time_of_day="07:00", active=True)
+    reminder = make_reminder(habits=["h1"])
+    coach = Coach(CoachingConfig(style="direct"))
+    rendered = coach.render_habit_list([habit], reminder)
+    assert rendered == "💧 drink water — morning"
+
+def test_graduated_coaching_message():
+    habit = Habit(id="h1", anchor="morning", behavior="drink water", celebration="yay", emoji="💧", time_of_day="07:00", active=True, graduated_to_automatic=True)
+    coach = Coach(CoachingConfig(style="direct"))
+    msg = coach.graduated_coaching(habit)
+    assert "**drink water** is automatic now" in msg
+
+def test_faded_coaching_message():
+    habit = Habit(id="h1", anchor="morning", behavior="drink water", celebration="yay", emoji="💧", time_of_day="07:00", active=True, faded=True)
+    coach = Coach(CoachingConfig(style="direct"))
+    msg = coach.faded_coaching(habit)
+    assert "You've been skipping **drink water**" in msg
+
+def test_build_reminder_message_substitutes():
+    habit = Habit(id="h1", anchor="morning", behavior="drink water", celebration="yay", emoji="💧", time_of_day="07:00", active=True)
+    reminder = make_reminder(message="Start your day: {habit_list}", habits=["h1"])
+    coach = Coach(CoachingConfig(style="direct"))
+    result = coach.build_reminder_message(reminder, [habit])
+    assert "💧 drink water — morning" in result
+    assert "{habit_list}" not in result
+
+def test_build_reminder_message_empty_list():
+    reminder = make_reminder(message="No habits: {habit_list}", habits=[])
+    coach = Coach(CoachingConfig(style="direct"))
+    result = coach.build_reminder_message(reminder, [])
+    assert result == "No habits: "
 
