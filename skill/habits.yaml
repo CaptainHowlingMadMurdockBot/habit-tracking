@@ -1,11 +1,130 @@
-# Habit tracking configuration
+# Habit tracking configuration — v0.2.0
 # Managed automatically by the habit-tracking skill.
 # Do not edit manually unless you know what you're doing.
+
+environment:
+  daily_log:
+    enabled: true
+    path: "/mnt/obsidian-vaults/eman-mobile/Daily/{date}.md"
+  time_boundaries:
+    morning_cutoff: "15:00"
+    cat_dinner_cutoff: "17:00"
 
 coaching:
   style: direct
   missed_day_policy: fire_and_forget
-  schedule_time: "21:00"
+
+celebrations:
+  - "Give yourself a high five!"
+  - "Sing the Zelda victory song — da-da-da-daaa!"
+  - "Big WOOOHOOO!"
+  - "Mental fist pump — done!"
+  - "Nice work, you did it!"
+
+reminders:
+  - id: "morning-coach"
+    schedule: "06:00"
+    cadence: "daily"
+    message: |
+      ## Morning Habits
+
+      Here are some things you could do this morning:
+
+      {habit_list}
+
+      Reply with the emoji for each one as you do it.
+    habits: ["cat-am", "meds-am", "teeth-am", "metamucil"]
+    follow_up_delay: 60
+
+  - id: "gratitude"
+    schedule: "14:30"
+    cadence: "daily"
+    message: "🙏 2:30 — gratitude time. Three specific things you're grateful for today."
+    habits: ["gratitude"]
+    follow_up_delay: null
+
+  - id: "pt-exercise"
+    schedule: "08:45"
+    cadence: "mon_wed_fri"
+    message: |
+      💪 Time for PT.
+
+      Stand desk up → Open Luna → Do your exercises.
+
+      Reply 💪 when done.
+    habits: ["pt-exercises"]
+    follow_up_delay: 30
+
+  - id: "evening-coach"
+    schedule: "21:00"
+    cadence: "daily"
+    message: |
+      ## Evening Habits
+
+      Here are some things you could do tonight:
+
+      {habit_list}
+
+      Reply with the emoji for each one as you do it.
+    habits: ["cat-pm", "meds-pm", "teeth-pm"]
+    follow_up_delay: 60
+
+  - id: "weekly-review"
+    schedule: "16:00"
+    cadence: "sunday"
+    message: |
+      ## Weekly Habit Review
+
+      Time to look back at this week's habits.
+
+      {weekly_summary}
+
+      Any adjustments you want to make?
+    habits: []
+    follow_up_delay: null
+
+journal:
+  - id: "mood"
+    label: "Mood"
+    prompt: "How's your mood today?"
+    schedule: "06:00"
+    cadence: "daily"
+    conversational: true
+
+  - id: "energy"
+    label: "Energy"
+    prompt: "Energy level?"
+    schedule: "06:00"
+    cadence: "daily"
+    conversational: true
+
+  - id: "sleep"
+    label: "Sleep"
+    prompt: "How did you sleep?"
+    schedule: "06:00"
+    cadence: "daily"
+    conversational: true
+
+  - id: "focus"
+    label: "Today's focus"
+    prompt: "What are you focusing on today?"
+    schedule: "06:00"
+    cadence: "daily"
+    conversational: true
+
+  - id: "meals"
+    label: "Meals"
+    prompt: "What did you eat?"
+    schedule: null
+    cadence: null
+    conversational: true
+
+  - id: "gratitude"
+    label: "Gratitude"
+    prompt: "Three things you're grateful for?"
+    schedule: "14:30"
+    cadence: "daily"
+    conversational: true
 
 habits:
   - id: "cat-am"
@@ -13,15 +132,33 @@ habits:
     behavior: "I will feed the cats"
     celebration: "Cats are happy!"
     emoji: "🐱"
+    emoji_variants: ["😺", "😻"]
     time_of_day: "morning"
+    chain_steps:
+      - "Grab dirty dish + cat food"
+      - "Set dish to soaking"
+      - "Wash other dish if needed"
+      - "Prepare food"
+      - "Feed cat"
+    graduated_to_automatic: false
+    faded: false
     active: true
 
   - id: "cat-pm"
-    anchor: "At 5 PM"
-    behavior: "I will feed the cats"
+    anchor: "At 5 PM (dinner time)"
+    behavior: "I will feed the cats dinner"
     celebration: "Evening cat crew fed!"
     emoji: "🐱"
+    emoji_variants: ["😺", "😻"]
     time_of_day: "evening"
+    chain_steps:
+      - "Grab dirty dish + cat food"
+      - "Set dish to soaking"
+      - "Wash other dish if needed"
+      - "Prepare food"
+      - "Feed cat"
+    graduated_to_automatic: false
+    faded: false
     active: true
 
   - id: "meds-am"
@@ -29,7 +166,11 @@ habits:
     behavior: "I will take my morning meds"
     celebration: "Meds done!"
     emoji: "💊"
+    emoji_variants: []
     time_of_day: "morning"
+    chain_steps: []
+    graduated_to_automatic: true
+    faded: false
     active: true
 
   - id: "meds-pm"
@@ -37,15 +178,62 @@ habits:
     behavior: "I will take my night meds"
     celebration: "Night meds done!"
     emoji: "💊"
+    emoji_variants: []
     time_of_day: "evening"
+    chain_steps: []
+    graduated_to_automatic: false
+    faded: false
     active: true
 
-  - id: "pool"
-    anchor: "On Tuesday, Thursday, and Saturday"
-    behavior: "I will swim in the pool"
-    celebration: "Pool day!"
-    emoji: "🏊"
-    time_of_day: "afternoon"
+  - id: "teeth-am"
+    anchor: "After I take my morning meds at the sink"
+    behavior: "I will brush my teeth"
+    celebration: "Fresh breath!"
+    emoji: "🦷"
+    emoji_variants: ["🪥"]
+    time_of_day: "morning"
+    chain_steps: []
+    graduated_to_automatic: false
+    faded: false
+    active: true
+
+  - id: "teeth-pm"
+    anchor: "After I take my night meds at the sink"
+    behavior: "I will brush my teeth"
+    celebration: "Fresh breath!"
+    emoji: "🦷"
+    emoji_variants: ["🪥"]
+    time_of_day: "evening"
+    chain_steps: []
+    graduated_to_automatic: false
+    faded: false
+    active: true
+
+  - id: "metamucil"
+    anchor: "After I feed the cats breakfast"
+    behavior: "I will take Metamucil"
+    celebration: "Fiber done!"
+    emoji: "🧃"
+    emoji_variants: []
+    time_of_day: "morning"
+    chain_steps: []
+    graduated_to_automatic: false
+    faded: false
+    active: true
+
+  - id: "pt-exercises"
+    anchor: "At 8:45 AM on Mon/Wed/Fri"
+    behavior: "I will do my PT exercises"
+    celebration: "Stronger every day!"
+    emoji: "💪"
+    emoji_variants: []
+    time_of_day: "morning"
+    chain_steps:
+      - "Stand desk up"
+      - "Open Luna"
+      - "Do exercises"
+    graduated_to_automatic: false
+    faded: false
     active: true
 
   - id: "gratitude"
@@ -53,5 +241,21 @@ habits:
     behavior: "I will write three specific gratitudes"
     celebration: "Gratitude logged!"
     emoji: "🙏"
+    emoji_variants: []
     time_of_day: "afternoon"
+    chain_steps: []
+    graduated_to_automatic: false
+    faded: false
+    active: true
+
+  - id: "pool"
+    anchor: "On Tuesday, Thursday, and Saturday"
+    behavior: "I will swim in the pool"
+    celebration: "Pool day!"
+    emoji: "🏊"
+    emoji_variants: []
+    time_of_day: "afternoon"
+    chain_steps: []
+    graduated_to_automatic: false
+    faded: false
     active: true

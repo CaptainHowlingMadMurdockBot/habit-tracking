@@ -1,13 +1,13 @@
 ---
 name: habit-tracking
-description: "Tiny Habits-based habit tracking — conversational setup, dynamic scheduling, non-judgemental coaching. Inspired by BJ Fogg's research."
-version: 0.1.0
+description: "Tiny Habits-based habit tracking — multi-reminder scheduling, dynamic cadences, graduated/automatic and faded habit coaching, celebration rotation, journal prompts, daily logging. Inspired by BJ Fogg's research."
+version: 0.2.0
 author: Hermes Agent (inspired by BJ Fogg's Tiny Habits methodology)
 license: MIT
 platforms: [linux, macos, windows]
 metadata:
   hermes:
-    tags: [habits, coaching, tiny-habits, productivity, wellness]
+    tags: [habits, coaching, tiny-habits, productivity, wellness, reminders]
     related_skills: [cronjob, reminder-management]
 ---
 
@@ -25,7 +25,7 @@ This skill is inspired by **BJ Fogg's Tiny Habits** methodology and research. BJ
 
 ## Overview
 
-This skill provides a complete habit tracking system built on BJ Fogg's Tiny Habits methodology. It uses a **single master cron job** that delivers a daily check-in, dynamically adjusts to your schedule, and coaches you in your chosen style.
+This skill provides a complete habit tracking system built on BJ Fogg's Tiny Habits methodology. It uses a **single master cron job running hourly** that checks which reminders are due based on schedule + cadence, sends those reminders, and checks for follow-up nudges.
 
 **Core principles:**
 - **Start small** — 1-2 habits at a time, tiny enough to feel easy
@@ -33,158 +33,317 @@ This skill provides a complete habit tracking system built on BJ Fogg's Tiny Hab
 - **Non-judgemental** — "could" not "should", missed days are data not failure
 - **Adaptive** — the check-in time shifts to match when you actually engage
 - **Conversational** — mention doing a habit and the bot offers to log it
+- **Graduated habits** — automatic habits get growth coaching, not reminders
+- **Faded habits** — skipped habits get B=MAP troubleshooting, not guilt
 
 ---
 
-## Tiny Habits Methodology
+## YAML Schema Reference
 
-### B=MAP (Fogg Behavior Model)
+The entire system is configured through `habits.yaml`. Here's the full schema:
 
-Behavior occurs when **Motivation**, **Ability**, and **Prompt** converge simultaneously:
+### environment
 
-- **Motivation** — how much you want to do the behavior
-- **Ability** — how easy the behavior is (the "Simplicity Factors": time, money, effort, brain cycles, routine)
-- **Prompt** — the trigger that tells you to act
+Per-user, per-install configuration.
 
-Tiny Habits works by maximizing **Ability** (making the behavior tiny) and using a reliable **Anchor** as the Prompt, reducing the need for strong Motivation.
-
-*Source: [bjfogg.com](https://www.bjfogg.com), Tiny Habits book Ch. 2*
-
-### The Recipe: Anchor → Behavior → Celebration
-
+```yaml
+environment:
+  daily_log:
+    enabled: true
+    path: "/mnt/obsidian-vaults/eman-mobile/Daily/{date}.md"
+    # {date} is replaced with YYYY-MM-DD at runtime
+    # Autumn might use: "/home/autumn/notes/daily/{date}.md"
+  time_boundaries:
+    morning_cutoff: "15:00"     # before = morning, after = evening
+    cat_dinner_cutoff: "17:00"  # before = breakfast, after = dinner
 ```
-After I [ANCHOR], I will [TINY BEHAVIOR], then I will [CELEBRATE].
+
+### coaching
+
+```yaml
+coaching:
+  style: direct                  # direct | warm | minimal
+  missed_day_policy: fire_and_forget
 ```
 
-- **Anchor** — an existing routine that reliably happens (e.g., "After I pour my morning coffee")
-- **Tiny Behavior** — a behavior so small it takes <30 seconds (e.g., "I will take my vitamins")
-- **Celebration** — a brief positive emotion or gesture immediately after (e.g., "I did it!")
+### celebrations
 
-The celebration creates a neural "shine" that wires the habit loop. Even a 1-second celebration dramatically increases habit formation speed.
+A list the skill rotates through. Each time a habit is logged, the next celebration in the list is used.
 
-*Source: [tinyhabits.com/tell-me-more3](https://tinyhabits.com/tell-me-more3/), Tiny Habits book Ch. 5*
+```yaml
+celebrations:
+  - "Give yourself a high five!"
+  - "Sing the Zelda victory song — da-da-da-daaa!"
+  - "Big WOOOHOOO!"
+  - "Mental fist pump — done!"
+  - "Nice work, you did it!"
+```
 
-### Start Small
+### reminders
 
-**Start with only 1-2 habits.** Research shows:
+Each reminder defines when to fire, what message to send, which habits it covers, and follow-up behavior.
 
-- **84%** of participants who started with a 1-second behavior maintained it after 6 weeks, vs **38%** for a 30-second behavior (Stanford Behavior Design Lab, 2018-19)
-- **71%** success rate with Tiny Habits formula vs **27%** for traditional goal-setting (Fogg et al., 2020, field trial with 1,200 users)
-- **3x increase** in habit retention when celebration is added immediately (Fogg, 2021, *Behavior Design* meta-analysis)
+```yaml
+reminders:
+  - id: "morning-coach"
+    schedule: "06:00"
+    cadence: "daily"              # daily | mon_wed_fri | tue_thu_sat | weekdays | weekends | sunday | day_name
+    message: |
+      ## Morning Habits
 
-*Source: [bjfogg.com](https://www.bjfogg.com), Tiny Habits book Ch. 4*
+      Here are some things you could do this morning:
 
-### Shrink the Habit
+      {habit_list}
 
-If a habit feels hard, **shrink it**:
-1. Reduce to an even smaller action (e.g., "floss one tooth" → "touch the floss")
-2. Keep the same anchor and celebration
-3. Once automatic, gradually expand
+      Reply with the emoji for each one as you do it.
+    habits: ["cat-am", "meds-am", "teeth-am", "metamucil"]
+    follow_up_delay: 60           # minutes; null = no follow-up
+```
 
-### Missed Days
+**Cadence values:**
+- `"daily"` — every day
+- `"weekdays"` — Monday through Friday
+- `"weekends"` — Saturday, Sunday
+- `"sunday"`, `"monday"`, etc. — specific day of week
+- `"mon_wed_fri"` — Monday, Wednesday, Friday
+- `"tue_thu_sat"` — Tuesday, Thursday, Saturday
 
-Missed days are **data, not failure**. Simply repeat the recipe the next day. No apology, no reprimand. The system never guilts you.
+**Message templates** support `{habit_list}` which is replaced with the rendered list of active, non-graduated habits.
+
+### journal
+
+What the user wants to be reminded to log, and when. These appear in coaching messages or are captured conversationally.
+
+```yaml
+journal:
+  - id: "mood"
+    label: "Mood"
+    prompt: "How's your mood today?"
+    schedule: "06:00"             # included in morning coach
+    cadence: "daily"
+    conversational: true          # also capture when mentioned naturally
+
+  - id: "meals"
+    label: "Meals"
+    prompt: "What did you eat?"
+    schedule: null                 # no scheduled reminder, conversational only
+    cadence: null
+    conversational: true
+```
+
+### habits
+
+Each habit is a single behavior. Habits that happen twice a day (like meds or cat feeding) are separate entries with different `id` and `time_of_day` values.
+
+```yaml
+habits:
+  - id: "cat-am"
+    anchor: "After I wake up and use the bathroom"
+    behavior: "I will feed the cats"
+    celebration: "Cats are happy!"
+    emoji: "🐱"
+    emoji_variants: ["😺", "😻"]   # alternative emojis that map to this habit
+    time_of_day: "morning"         # morning | afternoon | evening | any
+    chain_steps:                   # optional decomposition of the habit
+      - "Grab dirty dish + cat food"
+      - "Set dish to soaking"
+      - "Wash other dish if needed"
+      - "Prepare food"
+      - "Feed cat"
+    graduated_to_automatic: false   # true = automatic, coaching shifts to growth
+    faded: false                   # true = being skipped, coaching shifts to B=MAP troubleshooting
+    active: true
+```
+
+**Key fields:**
+- `graduated_to_automatic: true` — the habit is automatic. Excluded from reminder `{habit_list}`. Coaching shifts to growth/refinement.
+- `faded: true` — the habit is being skipped. Shown in `{habit_list}` with a trouble indicator. Coaching shifts to B=MAP troubleshooting.
+- A habit cannot have both `graduated_to_automatic` and `faded` set to true — the YAML validator rejects this.
+- `emoji_variants` — alternative emojis the user might send (e.g., `😺` for `🐱`, `🪥` for `🦷`). The system maps these to the canonical habit.
+- `chain_steps` — the decomposition of a multi-step habit. The first step is shown in coaching messages as the trigger.
+
+---
+
+## How the Master Cron Job Works
+
+The master cron job runs **every hour** (schedule: `0 * * * *`). On each fire:
+
+1. **Reads** `habits.yaml` from the skill directory
+2. **Checks reminders** — for each reminder, is the current time within its schedule window AND does today match its cadence?
+3. **Sends due reminders** — for each due reminder, builds the message from the template and delivers it
+4. **Checks follow-ups** — for each reminder with `follow_up_delay` set, is the current time = schedule time + delay? If so, checks if habits have been logged today. If not, sends a gentle nudge.
+5. **Does nothing** if nothing is due
+
+### Creating the cron job
+
+```python
+cronjob(
+    action="create",
+    name="habit-tracking-checkin",
+    schedule="0 * * * *",  # Every hour
+    prompt="Run the hourly habit check-in. Read habits.yaml from the skill directory, check which reminders are due based on schedule + cadence, send those reminders, and check for follow-up nudges.",
+    skills=["habit-tracking"],
+    deliver="origin",
+    attach_to_session=True,
+)
+```
+
+---
+
+## Coaching States
+
+### Normal habits (default)
+
+Appear in `{habit_list}` in reminder messages. Standard check-in treatment.
+
+### graduated_to_automatic: true
+
+The habit is automatic — the user does it without needing reminders.
+
+**Coaching behavior:**
+- Excluded from `{habit_list}` in reminder messages
+- Still accepts emoji logs and celebrates
+- When mentioned or during check-ins, offer **growth coaching**:
+  - "This habit is automatic now — that's the goal working."
+  - "Celebration is optional now. Keep it if it feels good, drop it if you don't need it."
+  - "Want to grow it? Or use this capacity for a new tiny habit?"
+  - "Is the anchor still working for you? Want to brainstorm options?"
+
+### faded: true
+
+The user is skipping the habit. This is data, not failure.
+
+**Coaching behavior:**
+- Appears in `{habit_list}` with a trouble indicator: `~~behavior~~ (having trouble? Let's talk about it)`
+- When mentioned or during check-ins, offer **B=MAP troubleshooting**:
+  - "You've been skipping this. That's data, not failure."
+  - "Let's look at B=MAP. Is it a Motivation issue? An Ability issue? A Prompt issue?"
+  - "If it feels hard, let's shrink it. What's the smallest version you could do?"
+  - "If the anchor isn't working, let's find a better one."
+  - "Want to brainstorm options together?"
+
+---
+
+## Celebration Rotation
+
+When a habit is logged, the system rotates through the configured celebrations list. Each time, the next celebration in the list is used. When the end is reached, it wraps around to the start.
+
+The celebration is sent immediately after logging, as a one-line message. This is not optional — the celebration is what wires the habit neurologically (Fogg's "shine" principle).
+
+---
+
+## Emoji Variant Mapping
+
+When the user sends an emoji, the system checks:
+1. Does it match a habit's `emoji` field directly?
+2. Does it match any `emoji_variants` for a habit?
+
+If a match is found, the habit is logged. Common variants:
+- `😺` / `😻` → `🐱` (cat fed)
+- `🪥` → `🦷` (brushed teeth)
+
+---
+
+## Time-of-Day Auto-Categorization
+
+When a habit with the same emoji appears twice a day (e.g., `💊` for morning and night meds), the system disambiguates by checking the current time against `environment.time_boundaries`:
+
+- Before `morning_cutoff` (default 15:00) → morning version
+- After `morning_cutoff` → evening version
+- For cat feeding: before `cat_dinner_cutoff` (default 17:00) → breakfast, after → dinner
+
+The system does NOT ask the user which version — it uses the clock automatically.
+
+---
+
+## Daily Log
+
+When `environment.daily_log.enabled` is true, habit completions and journal responses are written to the configured path. The `{date}` placeholder is replaced with the current date in YYYY-MM-DD format.
+
+**Habit log format:**
+```
+- [x] 💊 I will take my morning meds (morning)
+- [x] 🐱 I will feed the cats (morning)
+```
+
+**Journal log format:**
+```
+**Mood:** Pretty even today
+**Energy:** Good after 8 hours of sleep
+```
+
+The daily log path is environment-specific. For Obsidian users it might be:
+```
+/mnt/obsidian-vaults/eman-mobile/Daily/{date}.md
+```
+
+For flat-file users it might be:
+```
+/home/autumn/notes/daily/{date}.md
+```
+
+---
+
+## Conversational Logging
+
+When the user mentions doing a habit in conversation (outside the check-in flow), the agent should:
+
+1. **Detect** — scan the message for keywords from active habits' behavior and anchor text
+2. **Ask** — "Did you just do **{behavior}**? {emoji} Want me to log it?"
+3. **Log** — on confirmation, log to daily log and send celebration
+4. **Auto-categorize** — use time-of-day boundaries to determine morning vs evening
+
+This handles the common case where the user completes their routine before the reminder fires.
+
+---
+
+## Conversational Journal Logging
+
+The agent should proactively capture mood, energy, sleep, focus, meals, and gratitude when they come up naturally in conversation. When the user mentions these:
+
+1. Log to the daily log immediately
+2. Do NOT ask "what's your mood?" — wait for it to come up naturally
+3. Use the user's own words — do not paraphrase or polish
+
+Journal prompts with `conversational: true` in the YAML are candidates for this.
 
 ---
 
 ## Setup Flow
 
-When a user says "I want to set up habits" or similar, follow this guided flow **one question at a time**. Teach the Tiny Habits philosophy as you go.
+When a user says "I want to set up habits" or similar, follow this guided flow **one question at a time**.
 
 ### Step 1: Explain Tiny Habits
 
-> "Let's set up a habit tracking system based on BJ Fogg's Tiny Habits. The core idea is simple: start so small it feels almost too easy, attach it to something you already do, and celebrate immediately after. This works because we're designing for **ability** — making the behavior easy — rather than relying on motivation, which comes and goes."
+> "Let's set up a habit tracking system based on BJ Fogg's Tiny Habits. The core idea is simple: start so small it feels almost too easy, attach it to something you already do, and celebrate immediately after."
 
 ### Step 2: Ask about coaching style
 
 > "I can check in with you in different tones. Which feels right?
-> - **Direct** — straightforward, no fluff. 'How did it go? Reply with what you did! No worries if you missed one — tomorrow's a fresh start.'
-> - **Warm** — encouraging and supportive. 'How are you feeling about it? I'm proud of you for showing up.'
-> - **Minimal** — just the facts. 'Reply with your update.'
->
-> I'd recommend starting with **direct** — it's the clearest. You can change anytime."
+> - **Direct** — straightforward, no fluff
+> - **Warm** — encouraging and supportive
+> - **Minimal** — just the facts"
 
-### Step 3: Ask about missed day policy
+### Step 3: Ask about daily log
 
-> "If you don't reply for a while, how should I handle it?
-> - **Fire and forget** — I send one message per day, no follow-up. The schedule only shifts when you engage.
-> - **Retry once** — if you don't reply within a few hours, I'll send one gentle nudge.
-> - **Pause after 3** — if I don't hear from you for 3 days, I'll pause and ask if you want to keep going.
->
-> I'd recommend **fire and forget** — it's the least pressure."
+> "Do you want me to log your habits to a daily file? If so, where should I save it? (e.g., '/path/to/daily/{date}.md' — the {date} part gets replaced automatically)"
 
-### Step 4: Ask about initial check-in time
+### Step 4: Start with 1-2 habits
 
-> "What time of day should I check in? You can change this later — the system will actually adjust to when you naturally reply. For now, what works?"
-
-### Step 5: Start with 1-2 habits (Tiny Habits principle)
-
-> "Tiny Habits says to start with just **1 or 2 habits** — small enough that they feel easy. You can always add more later once these become automatic. What's one tiny thing you want to make a habit?"
+> "Tiny Habits says to start with just **1 or 2 habits**. What's one tiny thing you want to make a habit?"
 
 For each habit, ask:
+- What's the **anchor**?
+- What's the **tiny behavior**?
+- What **celebration** feels good?
+- What **emoji**?
+- What time of day?
 
-> "What's the **anchor** — an existing routine it will follow? (e.g., 'After I pour my morning coffee')"
->
-> "What's the **tiny behavior**? Keep it under 30 seconds. (e.g., 'I will take my vitamins')"
->
-> "What **celebration** feels good to you? (e.g., 'I did it!', a fist pump, 'Nice!')"
->
-> "What **emoji** should represent this habit?"
->
-> "What time of day? (morning / afternoon / evening / any)"
+### Step 5: Create the system
 
-**If they try to add more than 2 habits:** gently redirect.
-
-> "Tiny Habits research shows that starting with more than 2 habits dramatically lowers success rates. Let's nail these first, then add more in a week or two. Which 2 are most important to you right now?"
-
-### Step 6: Create the system
-
-Once setup is complete:
-
-1. Write the habits to `habits.yaml` in the skill directory
-2. Create the master cron job (see [Cron Job Setup](#cron-job-setup))
+1. Write the YAML file
+2. Create the master cron job (hourly)
 3. Confirm everything is working
-
----
-
-## Daily Check-in
-
-The master cron job fires once per day. When it fires, the agent:
-
-1. **Reads** `habits.yaml` from the skill directory
-2. **Generates** a check-in message using the configured coaching style
-3. **Delivers** the message to the user
-
-### Check-in message format
-
-```
-## Daily Check-in
-
-💊 I will take my vitamins — After I pour my morning coffee
-🧘 I will stretch — After lunch
-
-That's 2 habits today. How did it go? Reply with what you did!
-
-No worries if you missed one — tomorrow's a fresh start.
-```
-
-### After the user replies
-
-1. **Log the completion** — acknowledge what they did
-2. **Celebrate** — send a celebration message in their style
-3. **Update the schedule** — extract the reply timestamp, calculate the new cron time, update the cron job
-4. **Inform** — tell them when tomorrow's check-in will be
-
-### If the user mentions doing a habit in conversation
-
-The agent should **detect** when the user talks about their habits outside of the check-in flow. For example:
-
-> User: "I just took my vitamins with my coffee"
-> Agent: "Did you just do **I will take my vitamins**? 💊 Want me to log it?"
-
-Use the `detect_habit_mention` method: scan the user's message for keywords from active habits' behavior and anchor text. If a match is found, ask if they want to log it.
-
-This handles the common case where the user completes their routine before the reminder fires.
 
 ---
 
@@ -193,157 +352,39 @@ This handles the common case where the user completes their routine before the r
 Users manage their habits conversationally. The agent handles all YAML and cron operations.
 
 ### Add a habit
-
-> User: "I want to add a new habit"
-> Agent: "Great! What's the anchor — an existing routine it will follow?"
-
-Follow the same questions as Step 5 of setup. After collecting all details, add to `habits.yaml` and confirm.
+> "I want to add a new habit" → guided flow (same as Step 4)
 
 ### Remove a habit
-
-> User: "Remove the vitamins habit"
-> Agent: "Remove **I will take my vitamins** (💊)? [confirm]"
-> User: "Yes"
-> Agent: Removes from `habits.yaml`. "Done! Removed **I will take my vitamins**."
+> "Remove the vitamins habit" → confirm → remove from YAML
 
 ### List habits
-
-> User: "What are my habits?"
-> Agent: Reads `habits.yaml` and displays all active habits with their anchors and emojis.
+> "What are my habits?" → display all active habits
 
 ### Pause / Resume
+> "Pause stretching" → set `active: false`
+> "Resume stretching" → set `active: true`
 
-> User: "Pause the stretching habit"
-> Agent: Sets `active: false` in `habits.yaml`. "Paused **I will stretch**. It won't appear in check-ins until you resume it."
+### Mark as graduated
+> "Morning meds are automatic now" → set `graduated_to_automatic: true`
 
-> User: "Resume stretching"
-> Agent: Sets `active: true`. "Resumed **I will stretch**! It'll be in tonight's check-in."
+### Mark as faded
+> "I keep skipping Metamucil" → set `faded: true` → offer B=MAP troubleshooting
 
 ### Change coaching style
+> "Change my style to warm" → update `coaching.style`
 
-> User: "Change my style to warm"
-> Agent: Updates `coaching.style` in `habits.yaml`. "Done! I'll use a warmer tone from now on."
-
-### Change missed day policy
-
-> User: "If I don't reply, try again later"
-> Agent: Updates `coaching.missed_day_policy` to `retry_once`. "Got it. If you don't reply within a few hours, I'll send one gentle nudge."
-
----
-
-## Dynamic Scheduling
-
-The system adjusts its check-in time based on when the user actually engages.
-
-**How it works:**
-1. The cron job fires at the scheduled time
-2. The user replies at some time (e.g., 11:47 PM)
-3. The agent extracts the reply timestamp
-4. The agent calculates a new cron expression: `47 23 * * *`
-5. The agent updates the cron job with the new schedule
-6. The agent tells the user: "I've adjusted tomorrow's check-in to 23:47 to match when you're free."
-
-**If the user replies at the same time as before:** "I'll check in with you at the same time tomorrow (23:47)."
-
-**If the user doesn't reply:** the schedule stays the same. It only shifts when they engage.
-
----
-
-## Cron Job Setup
-
-The system uses a **single master cron job** that handles all habits. This avoids the complexity of managing multiple cron jobs.
-
-### Creating the cron job
-
-```python
-# The agent creates one cron job during setup
-cronjob(
-    action="create",
-    name="habit-tracking-checkin",
-    schedule="0 20 * * *",  # Initial time, adjusted dynamically
-    prompt="Run the daily habit check-in. Read habits.yaml from the skill directory, generate the check-in message using the configured coaching style, and deliver it to the user.",
-    skills=["habit-tracking"],
-    deliver="origin",
-    attach_to_session=True,  # So replies continue the conversation
-)
-```
-
-### Updating the cron job (dynamic scheduling)
-
-```python
-cronjob(
-    action="update",
-    job_id="<job_id>",
-    schedule="47 23 * * *",  # New time based on user's reply
-)
-```
-
-### Removing the cron job
-
-```python
-cronjob(action="list")  # Find the job_id
-cronjob(action="remove", job_id="<job_id>")
-```
-
----
-
-## Non-judgemental Coaching Guidelines
-
-The agent should follow these principles in all habit-related interactions:
-
-1. **"Could" not "should"** — "You could try..." not "You should..."
-2. **Celebrate every completion** — no matter how small
-3. **Missed days are data** — "No worries if you missed one — tomorrow's a fresh start."
-4. **Encourage shrinking, not quitting** — if a habit feels hard, suggest making it smaller
-5. **Never guilt or shame** — no "you didn't do it yesterday" without a neutral framing
-6. **Start small, stay small** — redirect if they try to add too many habits at once
-7. **Autonomy** — the user chooses their habits, style, and schedule
+### Add a reminder
+> "I want a reminder at 8:45 AM on weekdays for PT" → create reminder entry
 
 ---
 
 ## Pitfalls
 
-### User tries to add too many habits at once
-Redirect gently: "Tiny Habits research shows that starting with more than 2 habits dramatically lowers success rates. Let's nail these first."
-
-### User misses multiple days
-The system handles this based on the configured `missed_day_policy`. If `fire_and_forget`, just send the next check-in as normal. If `pause_after_3`, after 3 missed days send: "I noticed I haven't heard from you in a few days. Would you like to pause your habits, adjust them, or keep going?"
-
-### User wants to delete cron jobs themselves
-Explain: "There's one master cron job that handles all your habits. I can manage it for you — just tell me what you want to change."
-
-### YAML file corrupted
-If `habits.yaml` fails to parse, recreate from defaults and ask the user to confirm their habits.
-
-### User talks about habits outside check-in
-Use `detect_habit_mention` to check if they're describing a habit they've done. If so, offer to log it. This prevents the frustration of completing a habit, mentioning it, and the agent not connecting the dots.
-
----
-
-## File Structure
-
-```
-~/.hermes/skills/habit-tracking/
-├── SKILL.md              # This file
-├── habits.yaml           # Persistent habit data (managed by the agent)
-└── scripts/
-    └── setup.py          # Setup script for initial configuration
-```
-
-### habits.yaml format
-
-```yaml
-coaching:
-  style: direct           # direct | warm | minimal
-  missed_day_policy: fire_and_forget  # fire_and_forget | retry_once | pause_after_3
-  schedule_time: "20:00"  # HH:MM 24h format
-
-habits:
-  - id: "vitamins"
-    anchor: "After I pour my morning coffee"
-    behavior: "I will take my vitamins"
-    celebration: "I did it!"
-    emoji: "💊"
-    time_of_day: "morning"
-    active: true
-```
+- **graduated_to_automatic and faded cannot both be true** — the YAML validator rejects this
+- **Habits that happen twice a day need separate entries** — same emoji, different id and time_of_day
+- **The master cron job runs hourly** — it checks which reminders are due, it doesn't send everything every hour
+- **Follow-up nudges only fire if no habits have been logged** — the script checks the daily log
+- **Emoji variants must be mapped** — if the user sends an unmapped emoji, it won't be recognized
+- **Time-of-day boundaries are configurable** — adjust `environment.time_boundaries` if the user's schedule changes
+- **Daily log path is environment-specific** — each user needs their own path configured
+- **Always check the actual date before writing to the daily log** — sessions can span midnight
