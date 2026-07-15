@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from src.habitlib.models import Habit, CoachingConfig, HabitStoreConfig
+from src.habitlib.models import Habit, CoachingConfig, HabitStoreConfig, Reminder, JournalPrompt, EnvironmentConfig, ValidationError
 from src.habitlib.habits import HabitStore
 
 
@@ -54,6 +54,24 @@ def test_save_and_reload_roundtrip(tmp_path: Path):
     cfg = HabitStoreConfig(
         coaching=CoachingConfig(style="warm", missed_day_policy="retry_once", schedule_time="07:30"),
         habits=[habit1],
+        environment=EnvironmentConfig(),
+        celebrations=["Congrats"],
+        reminders=[
+            Reminder(
+                id="r1",
+                schedule="08:00",
+                cadence="daily",
+                message="Reminder msg",
+                habits=["h1"],
+            )
+        ],
+        journal=[
+            JournalPrompt(
+                id="j1",
+                label="Daily",
+                prompt="How are you?",
+            )
+        ],
     )
     store.save(cfg)
     loaded = store.load()
@@ -62,7 +80,13 @@ def test_save_and_reload_roundtrip(tmp_path: Path):
     assert loaded.coaching.schedule_time == "07:30"
     assert len(loaded.habits) == 1
     assert loaded.habits[0] == habit1
+    assert loaded.celebrations == ["Congrats"]
+    assert len(loaded.reminders) == 1
+    assert loaded.reminders[0].id == "r1"
+    assert len(loaded.journal) == 1
+    assert loaded.journal[0].id == "j1"
 
+# Existing habit tests
 
 def test_add_habit_creates_new_entry(tmp_path: Path):
     store = _default_store(tmp_path)
@@ -79,7 +103,6 @@ def test_add_habit_creates_new_entry(tmp_path: Path):
     assert len(cfg.habits) == 1
     assert cfg.habits[0] == habit
 
-
 def test_add_habit_raises_on_duplicate_id(tmp_path: Path):
     store = _default_store(tmp_path)
     habit = Habit(
@@ -93,7 +116,6 @@ def test_add_habit_raises_on_duplicate_id(tmp_path: Path):
     store.add_habit(habit)
     with pytest.raises(ValueError, match="already exists"):
         store.add_habit(habit)
-
 
 def test_remove_habit_by_id(tmp_path: Path):
     store = _default_store(tmp_path)
@@ -113,11 +135,73 @@ def test_remove_habit_by_id(tmp_path: Path):
         emoji="🔸",
         time_of_day="any",
     )
-    # add both
     store.add_habit(habit_a)
     store.add_habit(habit_b)
-    # remove one
     store.remove_habit("a")
     cfg = store.load()
     assert len(cfg.habits) == 1
     assert cfg.habits[0].id == "b"
+
+# New tests for v0.2.0 features
+
+def test_add_and_remove_reminder(tmp_path: Path):
+    store = _default_store(tmp_path)
+    reminder = Reminder(
+        id="rem1",
+        schedule="09:00",
+        cadence="daily",
+        message="Test reminder",
+        habits=[],
+    )
+    store.add_reminder(reminder)
+    cfg = store.load()
+    assert len(cfg.reminders) == 1
+    assert cfg.reminders[0] == reminder
+    # remove
+    store.remove_reminder("rem1")
+    cfg = store.load()
+    assert cfg.reminders == []
+
+def test_add_and_remove_journal_prompt(tmp_path: Path):
+    store = _default_store(tmp_path)
+    prompt = JournalPrompt(id="jp1", label="Label", prompt="Ask?",
+                          schedule="10:00", cadence="daily")
+    store.add_journal_prompt(prompt)
+    cfg = store.load()
+    assert len(cfg.journal) == 1
+    assert cfg.journal[0] == prompt
+    store.remove_journal_prompt("jp1")
+    cfg = store.load()
+    assert cfg.journal == []
+
+def test_add_and_remove_celebration(tmp_path: Path):
+    store = _default_store(tmp_path)
+    store.add_celebration("Yay!")
+    cfg = store.load()
+    assert cfg.celebrations == ["Yay!"]
+    store.remove_celebration("Yay!")
+    cfg = store.load()
+    assert cfg.celebrations == []
+
+def test_validation_catches_invalid_schedule(tmp_path: Path):
+    store = _default_store(tmp_path)
+    # invalid reminder schedule
+    bad_reminder = Reminder(
+        id="bad",
+        schedule="invalid",
+        cadence="daily",
+        message="Oops",
+        habits=[],
+    )
+    # add_reminder validates and should raise
+    with pytest.raises(ValidationError):
+        store.add_reminder(bad_reminder)
+
+def test_load_nonexistent_returns_all_defaults(tmp_path: Path):
+    store = _default_store(tmp_path)
+    cfg = store.load()
+    # ensure all new sections exist and are empty/default
+    assert cfg.environment is not None
+    assert cfg.celebrations == []
+    assert cfg.reminders == []
+    assert cfg.journal == []
