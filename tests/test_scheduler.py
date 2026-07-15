@@ -3,24 +3,56 @@ import sys, os
 sys.path.append(os.path.abspath('src'))
 
 from src.habitlib.scheduler import Scheduler
+from src.habitlib.models import Reminder
 
-def test_reply_time_to_cron_evening():
-    assert Scheduler.reply_time_to_cron("23:47") == "47 23 * * *"
+def test_matches_cadence_daily(monkeypatch):
+    # weekday irrelevant, set to Wednesday (2)
+    monkeypatch.setattr(Scheduler, "_weekday_index", lambda: 2)
+    assert Scheduler.matches_cadence("daily") is True
 
-def test_reply_time_to_cron_midnight():
-    assert Scheduler.reply_time_to_cron("00:15") == "15 0 * * *"
+def test_matches_cadence_mon_wed_fri_monday(monkeypatch):
+    monkeypatch.setattr(Scheduler, "_weekday_index", lambda: 0)  # Monday
+    assert Scheduler.matches_cadence("mon_wed_fri") is True
 
-def test_reply_time_to_cron_morning():
-    assert Scheduler.reply_time_to_cron("08:00") == "0 8 * * *"
+def test_matches_cadence_mon_wed_fri_tuesday(monkeypatch):
+    monkeypatch.setattr(Scheduler, "_weekday_index", lambda: 1)  # Tuesday
+    assert Scheduler.matches_cadence("mon_wed_fri") is False
 
-def test_schedule_update_message_same():
-    msg = Scheduler.schedule_update_message("09:30", "09:30")
-    assert msg == "I'll check in with you at the same time tomorrow (09:30)."
+def test_matches_cadence_sunday_true(monkeypatch):
+    monkeypatch.setattr(Scheduler, "_weekday_index", lambda: 6)  # Sunday
+    assert Scheduler.matches_cadence("sunday") is True
 
-def test_schedule_update_message_changed():
-    msg = Scheduler.schedule_update_message("09:30", "10:45")
-    assert msg == "I've adjusted tomorrow's check-in to 10:45 to match when you're free."
+def test_matches_cadence_sunday_false(monkeypatch):
+    monkeypatch.setattr(Scheduler, "_weekday_index", lambda: 0)  # Monday
+    assert Scheduler.matches_cadence("sunday") is False
 
-def test_now_as_hhmm_format():
-    result = Scheduler.now_as_hhmm()
-    assert re.fullmatch(r"\d{2}:\d{2}", result), f"Unexpected format: {result}"
+def test_matches_cadence_weekdays_wednesday(monkeypatch):
+    monkeypatch.setattr(Scheduler, "_weekday_index", lambda: 2)  # Wednesday
+    assert Scheduler.matches_cadence("weekdays") is True
+
+def test_matches_cadence_weekdays_saturday(monkeypatch):
+    monkeypatch.setattr(Scheduler, "_weekday_index", lambda: 5)  # Saturday
+    assert Scheduler.matches_cadence("weekdays") is False
+
+def test_due_reminders_matching():
+    reminder = Reminder(id="r1", schedule="09:00", cadence="daily", message="msg", habits=[], follow_up_delay=None)
+    due = Scheduler.due_reminders([reminder], current_time="09:00")
+    assert due == [reminder]
+
+def test_due_reminders_none():
+    reminder = Reminder(id="r1", schedule="09:00", cadence="daily", message="msg", habits=[], follow_up_delay=None)
+    due = Scheduler.due_reminders([reminder], current_time="10:00")
+    assert due == []
+
+def test_follow_up_due_true():
+    reminder = Reminder(id="r1", schedule="09:00", cadence="daily", message="msg", habits=[], follow_up_delay=15)
+    assert Scheduler.follow_up_due(reminder, "09:15") is True
+
+def test_follow_up_due_no_delay_false():
+    reminder = Reminder(id="r1", schedule="09:00", cadence="daily", message="msg", habits=[], follow_up_delay=None)
+    assert Scheduler.follow_up_due(reminder, "09:15") is False
+
+def test_follow_up_due_wrong_time_false():
+    reminder = Reminder(id="r1", schedule="09:00", cadence="daily", message="msg", habits=[], follow_up_delay=15)
+    assert Scheduler.follow_up_due(reminder, "09:20") is False
+
