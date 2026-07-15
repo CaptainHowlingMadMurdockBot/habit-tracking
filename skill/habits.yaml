@@ -3,15 +3,55 @@
 # Do not edit manually unless you know what you're doing.
 
 coaching:
-  style: direct  # direct | warm | minimal
-  missed_day_policy: fire_and_forget  # fire_and_forget | retry_once | pause_after_3
-  schedule_time: "20:00"  # Initial default time (24h format)
+  style: direct
+  missed_day_policy: fire_and_forget
+  schedule_time: "21:00"
 
 habits:
-  - id: "example"
-    anchor: "After I pour my morning coffee"
-    behavior: "I will take my vitamins"
-    celebration: "I did it!"
+  - id: "cat-am"
+    anchor: "After I wake up and use the bathroom"
+    behavior: "I will feed the cats"
+    celebration: "Cats are happy!"
+    emoji: "🐱"
+    time_of_day: "morning"
+    active: true
+
+  - id: "cat-pm"
+    anchor: "At 5 PM"
+    behavior: "I will feed the cats"
+    celebration: "Evening cat crew fed!"
+    emoji: "🐱"
+    time_of_day: "evening"
+    active: true
+
+  - id: "meds-am"
+    anchor: "After I feed the cats in the morning"
+    behavior: "I will take my morning meds"
+    celebration: "Meds done!"
     emoji: "💊"
     time_of_day: "morning"
-    active: false  # Example habit, inactive by default
+    active: true
+
+  - id: "meds-pm"
+    anchor: "After I feed the cats in the evening"
+    behavior: "I will take my night meds"
+    celebration: "Night meds done!"
+    emoji: "💊"
+    time_of_day: "evening"
+    active: true
+
+  - id: "pool"
+    anchor: "On Tuesday, Thursday, and Saturday"
+    behavior: "I will swim in the pool"
+    celebration: "Pool day!"
+    emoji: "🏊"
+    time_of_day: "afternoon"
+    active: true
+
+  - id: "gratitude"
+    anchor: "At 2:30 PM"
+    behavior: "I will write three specific gratitudes"
+    celebration: "Gratitude logged!"
+    emoji: "🙏"
+    time_of_day: "afternoon"
+    active: true
